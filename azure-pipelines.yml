@@ -12,8 +12,8 @@ steps:
 
   # Step 2: Display the actual agent name
   - script: |
-      echo "Running on agent: $(Agent.Name)"
-    displayName: 'Display Agent Name'
+      echo "Running on agent"
+    displayName: 'slave-node'
 
   # Step 3: Build the Docker image
   - script: |
@@ -29,9 +29,23 @@ steps:
       sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
     displayName: 'Push Docker Image to AWS ECR'
 
-  # Step 5: Deploy the Docker container DEV
+  # Step 5: Deploy to DEV
   - script: |
       echo "Deploying to DEV"
       sudo docker rm -f my-angular-app
-      sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+      sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest      
     displayName: 'Deploy to DEV'
+
+# Step 5: Deploy to QA
+
+  # Step 5: Deploy to QA
+  - task: SSH@0
+    inputs:
+      sshEndpoint: 'QA_ENV_SSH_CRED'  # Use the service connection name created in Step 1
+      runOptions: 'commands'
+      commands: |
+        echo "Deploying to QA"
+        sudo docker rm -f my-angular-app
+        sudo docker pull 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest 
+        sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+    displayName: 'Deploy to QA_ENV'
