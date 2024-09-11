@@ -9,7 +9,6 @@ steps:
   - script: |
       echo "Checkout from azure repo"
   - checkout: self
-    persistCredentials: true
 
   # Step 2: Display the actual agent name
   - script: |
@@ -19,12 +18,20 @@ steps:
   # Step 3: Build the Docker image
   - script: |
       echo "Build Docker Images"
-      docker build -t flask-app:$(Build.BuildId) .
+      cp Dockerfile Admin/
+      sudo docker build -t my-angular-app:$(Build.BuildId) Admin/
+      sudo docker tag my-angular-app:$(Build.BuildId) 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
     displayName: 'Build Docker Image'
 
-  # Step 4: Deploy the Docker container using the pool agent
+  # Step 4: "Push Docker Image to AWS ECR"
   - script: |
-      echo "Deploying the container on Docker host"
-      docker rm -f flask-app || true  # Remove the container if it exists
-      docker run -dit --name flask-app -p 8081:80 flask-app:$(Build.BuildId)
-    displayName: 'Deploy Docker Container'
+      echo "Push Docker Image"
+      sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+    displayName: 'Push Docker Image to AWS ECR'
+
+  # Step 5: Deploy the Docker container DEV
+  - script: |
+      echo "Deploying to DEV"
+      sudo docker rm -f my-angular-app
+      sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+    displayName: 'Deploy to DEV'
