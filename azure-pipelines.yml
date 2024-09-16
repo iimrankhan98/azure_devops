@@ -35,6 +35,7 @@ stages:
           # Step 4: Push Docker Image to AWS ECR
           - script: |
               echo "Push Docker Image"
+              sudo aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
               sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
             displayName: 'Push Docker Image to AWS ECR'
 
@@ -63,6 +64,8 @@ stages:
               commands: |
                 echo "Deploying to QA"
                 sudo docker rm -f my-angular-app
+                sudo bash -c "sudo -i && whoami"
+                sudo aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
                 sudo docker pull 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
                 sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
             displayName: 'Deploy to QA'
