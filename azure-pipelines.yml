@@ -4,46 +4,64 @@ trigger:
 pool:
   name: 'slave-node'
 
-steps:
-  # Step 1: Check out the source code from the repository
-  - script: |
-      echo "Checkout from azure repo"
-  - checkout: self
+stages:
+  # Stage 1: DEV Stage
+  - stage: DevStage
+    displayName: 'DEV Stage'
+    jobs:
+      - job: DevJob
+        displayName: 'Build and Deploy to DEV'
+        pool:
+          name: 'slave-node'
+        steps:
+          # Step 1: Check out the source code from the repository
+          - script: |
+              echo "Checkout from azure repo"
+          - checkout: self
 
-  # Step 2: Display the actual agent name
-  - script: |
-      echo "Running on agent: $(Agent.Name)"
-    displayName: 'Display Agent Name'
+          # Step 2: Display the actual agent name
+          - script: |
+              echo "Running on agent: $(Agent.Name)"
+            displayName: 'Display Agent Name'
 
-  # Step 3: Build the Docker image
-  - script: |
-      echo "Build Docker Images"
-      cp Dockerfile Admin/
-      sudo docker build -t my-angular-app:$(Build.BuildId) Admin/
-      sudo docker tag my-angular-app:$(Build.BuildId) 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
-    displayName: 'Build Docker Image'
+          # Step 3: Build the Docker image
+          - script: |
+              echo "Build Docker Images"
+              cp Dockerfile Admin/
+              sudo docker build -t my-angular-app:$(Build.BuildId) Admin/
+              sudo docker tag my-angular-app:$(Build.BuildId) 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+            displayName: 'Build Docker Image'
 
-  # Step 4: "Push Docker Image to AWS ECR"
-  - script: |
-      echo "Push Docker Image"
-      sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
-    displayName: 'Push Docker Image to AWS ECR'
+          # Step 4: Push Docker Image to AWS ECR
+          - script: |
+              echo "Push Docker Image"
+              sudo aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
+              sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+            displayName: 'Push Docker Image to AWS ECR'
+            
+          # Step 5: Deploy the Docker container to DEV
+          - script: |
+              echo "Deploying to DEV"
+              sudo docker rm -f my-angular-app
+              sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+            displayName: 'Deploy to DEV'
 
-  # Step 5: Deploy the Docker container DEV
-  - script: |
-      echo "Deploying to DEV"
-      sudo docker rm -f my-angular-app
-      sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
-    displayName: 'Deploy to DEV'
-
-  # Step 5: Deploy to QA
-  - task: SSH@0
-    inputs:
-      sshEndpoint: 'QA_ENV_SSH_CRED'  # Use the service connection name created in Step 1
-      runOptions: 'commands'
-      commands: |
-        echo "Deploying to QA"
-        sudo docker rm -f my-angular-app
-        sudo docker pull 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest 
-        sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
-    displayName: 'Deploy on QA'
+  # Stage 2: QA Stage
+  - stage: QaStage
+    displayName: 'QA Stage'
+    dependsOn: DevStage
+    jobs:
+      - job: QaJob
+        displayName: 'Deploy to QA'
+        steps:
+          # Step 1: Deploy to QA using SSH task
+          - task: SSH@0
+            inputs:
+             sshEndpoint: 'QA_ENV_SSH_CRED'  # Use the service connection name created in Step 1
+             runOptions: 'commands'
+             commands: |
+              echo "Deploying to QA"
+              sudo docker rm -f my-angular-app
+              sudo docker pull 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest 
+              sudo docker run -dit --name my-angular-app -p 4300:80 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:latest
+            displayName: 'Deploy to QA'
