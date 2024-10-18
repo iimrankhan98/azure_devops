@@ -1,0 +1,39 @@
+trigger:
+  - master
+
+pool:
+  name: 'visionapply-frontend-prod'
+
+stages:
+  # Stage 1: Build Stage
+  - stage: BuildStage
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build the Docker image'
+        pool:
+          name: 'visionapply-frontend-prod'
+        steps:
+          # Step 1: Check out the source code from the repository
+          - script: |
+              echo "Checkout from azure repos"
+          - checkout: self
+
+          # Step 2: Display the actual agent name
+          - script: |
+              echo "Running on agent: $(Agent.Name)"
+            displayName: 'Display Agent Name'
+
+          # Step 3: Build the Docker image
+          - script: |
+              echo "Build Docker Images"
+              sudo docker build -t 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId) --build-arg env=prod Admin/
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Build Docker Image'
+
+          # Step 4: Push Docker Image to AWS ECR
+          - script: |
+              echo "Push Docker Image"
+              sudo aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
+              sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId)
+            displayName: 'Push Docker Image to AWS ECR'
