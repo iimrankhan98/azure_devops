@@ -1,0 +1,92 @@
+
+FROM node:18-alpine AS build
+
+# Set the working directory inside the container
+
+WORKDIR /app
+
+# Copy package.json and package-lock.json to install dependencies
+
+COPY package*.json ./
+
+# Install dependencies
+
+RUN npm install -g npm@10.8.3
+
+# Install Angular CLI globally
+
+RUN npm install -g @angular/cli
+
+# Copy the rest of the application code
+
+COPY . .
+
+# Build the Angular app
+
+RUN npm install --save-dev @angular-devkit/build-angular
+
+# Set an environment variable
+#ENV NODE_ENV=development
+
+
+RUN npm run build-dev -- --configuration=development
+
+
+# Stage 2: Serve the app with Nginx
+FROM nginx:alpine
+
+# Copy the built files from the previous stage to Nginx's HTML folder
+
+COPY --from=build /app/dist/skote /usr/share/nginx/html
+COPY ./nginx-custom.conf /etc/nginx/conf.d/default.conf
+# Expose port 4300 to access the application
+
+EXPOSE 4300
+
+# Start Nginx
+
+CMD ["nginx", "-g", "daemon off;"]
+
+#############################################################################################
+
+trigger:
+  - development
+
+pool:
+  name: 'visionapply-crm-frontend-slave'
+
+stages:
+  # Stage 1: Build Stage
+  - stage: BuildStage
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build the Docker image'
+        pool:
+          name: 'visionapply-crm-frontend-slave'
+        steps:
+          # Step 1: Check out the source code from the repository
+          - script: |
+              echo "Checkout from azure repo"
+          - checkout: self
+
+          # Step 2: Display the actual agent name
+          - script: |
+              echo "Running on agent: $(Agent.Name)"
+            displayName: 'Display Agent Name'
+
+          # Step 3: Build the Docker image
+          - script: |
+              echo "Build Docker Images"
+              sudo docker build -t 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:$(Build.BuildId) --build-arg env=development Admin/
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Build Docker Image'
+
+          # Step 4: Push Docker Image to AWS ECR
+          - script: |
+              echo "Push Docker Image"
+              sudo aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
+              sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/visionapplycrm:$(Build.BuildId)
+            displayName: 'Push Docker Image to AWS ECR'
+
+  
