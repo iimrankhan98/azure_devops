@@ -1,0 +1,65 @@
+# Use the official Golang image as a base
+FROM golang:1.23-alpine
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the Go module files
+COPY go.mod go.sum ./
+
+# Download and install dependencies
+RUN go mod download
+
+# Copy the application source code
+COPY . .
+
+# Build the Go application
+RUN go build -o main ./cmd/main/main.go
+
+# Expose the port your application listens on (if applicable)
+EXPOSE 8080
+
+# Define the command to run your application
+CMD ["./main"]
+
+########################################################################################
+
+trigger:
+  - development
+
+pool:
+  name: 'waptoz-backend-dev'
+
+stages:
+  # Stage 1: Build Stage
+  - stage: BuildStage
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build the Docker image'
+        pool:
+          name: 'waptoz-backend-dev'
+        steps:
+          # Step 1: Check out the source code from the repository
+          - script: |
+              echo "Checkout from azure repo"
+          - checkout: self
+
+          # Step 2: Display the actual agent name
+          - script: |
+              echo "Running on agent: $(Agent.Name)"
+            displayName: 'Display Agent Name'
+
+          # Step 3: Build the Docker image
+          - script: |
+              echo "Build Docker Images"
+              sudo docker build -t 471112689362.dkr.ecr.ap-south-1.amazonaws.com/waptoz-backend-dev:$(Build.BuildId) .
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Build Docker Image'
+
+          # Step 4: Push Docker Image to AWS ECR
+          - script: |
+              echo "Push Docker Image"
+              aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 471112689362.dkr.ecr.ap-south-1.amazonaws.com
+              docker push 471112689362.dkr.ecr.ap-south-1.amazonaws.com/waptoz-backend-dev:$(Build.BuildId)
+            displayName: 'Push Docker Image to AWS ECR'
