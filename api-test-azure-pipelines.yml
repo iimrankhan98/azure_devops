@@ -1,0 +1,87 @@
+trigger:
+  - development
+
+pool:
+  name: 'backend-slave-node'
+
+resources:
+  repositories:
+    - repository: VisionApplyQAAPIAutomation
+      type: git
+      name: VisionWayB2BAndB2C/_git/VisionApplyQAAPIAutomation
+      ref: refs/heads/master
+
+stages:
+  # Stage 1: Build Stage
+  - stage: BuildStage
+    displayName: 'Build Docker Image'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build Docker Image'
+        pool:
+          name: 'backend-slave-node'
+        steps:
+          - checkout: self
+            displayName: 'Checkout Main Repository'
+
+          - script: |
+              echo "Removing checked-out repositories..."
+              pwd
+              sudo rm -rf VisionApplyQAAPIAutomation/
+            displayName: 'Cleanup'
+
+          - checkout: VisionApplyQAAPIAutomation
+            displayName: 'Checkout Additional Repository'
+
+          - script: |
+              echo "Build Docker Images"
+              sudo docker build -t 769916001201.dkr.ecr.ap-south-1.amazonaws.com/company-backend:$(Build.BuildId) /home/ubuntu/myagent/_work/1/s/visionway-company-backend/
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Build Docker Image'
+
+  # Stage 2: Deploy Stage
+  - stage: DeployStage
+    displayName: 'Deploy to DEV'
+    dependsOn: BuildStage
+    jobs:
+      - job: DeployJob
+        displayName: 'Deploy Docker Container to DEV'
+        pool:
+          name: 'backend-slave-node'
+        steps:
+          - script: |
+              echo "Deploying to Dev"
+              sudo docker rm -f company-backend-app
+              sudo docker run -dit --name company-backend-app -p 5000:3000 -p 8000:8000 --restart always 769916001201.dkr.ecr.ap-south-1.amazonaws.com/company-backend:$(Build.BuildId)
+            displayName: 'Deploy to DEV'
+
+  # Stage 3: Test Stage
+  - stage: TestStage
+    displayName: 'API Test'
+    dependsOn: DeployStage
+    jobs:
+      - job: TestJob
+        displayName: 'Run API Tests'
+        pool:
+          name: 'backend-slave-node'
+        steps:
+          - script: |
+              echo "Running API Tests"
+              pwd
+              sudo bash -c "cd /home/ubuntu/myagent/_work/1/s/VisionApplyQAAPIAutomation/ && mvn clean test"
+            displayName: 'API Test'
+
+  # Stage 4: Push Stage
+  - stage: PushStage
+    displayName: 'Push Docker Image to AWS ECR'
+    dependsOn: TestStage
+    jobs:
+      - job: PushJob
+        displayName: 'Push Docker Image to AWS ECR'
+        pool:
+          name: 'backend-slave-node'
+        steps:
+          - script: |
+              sudo aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 769916001201.dkr.ecr.ap-south-1.amazonaws.com
+              sudo docker push 769916001201.dkr.ecr.ap-south-1.amazonaws.com/company-backend:$(Build.BuildId)
+            displayName: 'Push Docker Image to AWS ECR'
