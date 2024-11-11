@@ -1,0 +1,68 @@
+# Use Node.js as the base image
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package.json package-lock.json ./
+
+# Install dependencies with --legacy-peer-deps flag
+RUN npm install --legacy-peer-deps
+
+# Install Next.js
+RUN npm install next --legacy-peer-deps
+
+# Copy the rest of the application code
+COPY . .
+
+# Build the Next.js app
+RUN npm run build
+
+# Expose the port on which the app will run
+EXPOSE 3000
+
+# Start the Next.js server in production mode
+CMD ["npm", "start"]
+
+##########################################################################################
+
+trigger:
+  - development
+
+pool:
+  name: 'waptoz-dev'
+
+stages:
+  # Stage 1: Build Stage
+  - stage: BuildStage
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build the Docker image'
+        pool:
+          name: 'waptoz-dev'
+        steps:
+          # Step 1: Check out the source code from the repository
+          - script: |
+              echo "Checkout from azure repo"
+          - checkout: self
+
+          # Step 2: Display the actual agent name
+          - script: |
+              echo "Running on agent: $(Agent.Name)"
+            displayName: 'Display Agent Name'
+
+          # Step 3: Build the Docker image
+          - script: |
+              echo "Build Docker Images"
+              sudo docker build -t 471112689362.dkr.ecr.ap-south-1.amazonaws.com/waptoz-frontend-dev:$(Build.BuildId) .
+              echo "Build ID: $(Build.BuildId)"
+            displayName: 'Build Docker Image'
+
+          # Step 4: Push Docker Image to AWS ECR
+          - script: |
+              echo "Push Docker Image"
+              sudo aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 471112689362.dkr.ecr.ap-south-1.amazonaws.com
+              sudo docker push 471112689362.dkr.ecr.ap-south-1.amazonaws.com/waptoz-frontend-dev:$(Build.BuildId)
+            displayName: 'Push Docker Image to AWS ECR'
