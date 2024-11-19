@@ -1,0 +1,23 @@
+# step 1: build the rust application
+FROM rust:latest AS builder
+
+WORKDIR /app
+
+COPY Cargo.toml ./
+RUN mkdir src
+COPY src/ src/
+
+RUN cargo build --release
+
+# step 2: create the runtime image
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y libssl-dev
+
+COPY --from=builder /app/target/release/interview-app-backend . 
+
+EXPOSE 8000
+
+CMD ["./interview-app-backend"]
