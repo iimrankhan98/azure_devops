@@ -1,3 +1,54 @@
+## deployment.yml ##
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visionapply-frontend-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      env: prod
+  template:
+    metadata:
+      labels:
+        env: prod
+    spec:
+      containers:
+      - name: frontend-app
+        image: 650378210006.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:6035
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+## svc.yml ##
+apiVersion: v1
+kind: Service
+metadata:
+  name: visionapply-frontend
+  labels:
+    app: visionapply-frontend
+spec:
+  selector:
+    env: prod
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      
+## ingress.yml##
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
