@@ -1,0 +1,69 @@
+trigger:
+  branches:
+    include:
+      - master
+
+resources:
+  repositories:
+    # Azure Repos for source code and Dockerfile
+    - repository: azureRepo
+      type: git
+      name: VisionWayB2BAndB2C/VisionapplyCRM  # Azure Repo path
+    # GitHub Repo for deployment YAML
+    - repository: githubRepo
+      type: github
+      name: centocode/visionway  # GitHub Repo path
+      endpoint: my-github  # Azure DevOps GitHub service connection name
+
+pool:
+  name: jobs-build-server  # Use your self-hosted agent pool
+
+stages:
+  # Stage 1: 'Build and Push Docker Image'
+  - stage: BuildAndPush
+    displayName: 'Build and Push Docker Image'
+    jobs:
+      - job: BuildDocker
+        displayName: 'Build Docker Image and Push to AWS ECR'
+        pool:
+          name: jobs-build-server  # Self-hosted agent pool
+        steps:
+          # Step 1: Checkout code from Azure Repos
+          - checkout: azureRepo
+
+          # Step 2: Build Docker image
+          - script: |
+              echo "Building Docker Image"
+              aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 650378210006.dkr.ecr.ap-south-1.amazonaws.com
+              docker build -t 650378210006.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId) --build-arg env=prod Admin/
+              docker push 650378210006.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId)
+            displayName: 'Build and Push Docker Image'
+
+  # Stage 2: 'Update Deployment YAML'
+  - stage: UpdateDeployment
+    displayName: 'Update Deployment YAML'
+    dependsOn: BuildAndPush
+    jobs:
+      - job: UpdateYAML
+        displayName: 'Update GitHub Deployment YAML with New Image'
+        pool:
+          name: jobs-build-server  # Self-hosted agent pool
+        steps:
+          # Step 1: Checkout GitHub repository
+          - checkout: githubRepo
+            persistCredentials: true
+
+          # Step 2: Update deployment YAML with the new Docker image tag
+          - script: |
+              echo "Updating Deployment YAML with new Docker Image Tag"
+              IMAGE_TAG=650378210006.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId)
+              cd visionapply-frontend-prod
+              sed -i "s|image: .*|image: ${IMAGE_TAG}|g" deployment.yaml
+              git config user.email "imran@centocode.com"
+              git config user.name "centocode"
+              git fetch origin
+              git checkout main  # Explicitly switch to the master branch
+              git add deployment.yaml
+              git commit -m "Update deployment images to ${IMAGE_TAG}"
+              git push origin main
+            displayName: 'Update Deployment YAML in GitHub'
