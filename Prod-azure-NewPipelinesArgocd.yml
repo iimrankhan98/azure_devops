@@ -28,10 +28,17 @@ stages:
         pool:
           name: jobs-build-server  # Self-hosted agent pool
         steps:
-          # Step 1: Checkout code from Azure Repos
+          # Step 1: Clean workspace
+          - script: |
+              echo "Cleaning workspace"
+              pwd
+              rm -rf $(Agent.BuildDirectory)/*
+            displayName: 'Clean Workspace'
+
+          # Step 2: Checkout code from Azure Repos
           - checkout: azureRepo
 
-          # Step 2: Build Docker image
+          # Step 3: Build and Push Docker Image
           - script: |
               echo "Building Docker Image"
               aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 650378210006.dkr.ecr.ap-south-1.amazonaws.com
@@ -49,11 +56,18 @@ stages:
         pool:
           name: jobs-build-server  # Self-hosted agent pool
         steps:
-          # Step 1: Checkout GitHub repository
+          # Step 1: Clean workspace
+          - script: |
+              echo "Cleaning workspace"
+              pwd
+              rm -rf $(Agent.BuildDirectory)/*
+            displayName: 'Clean Workspace'
+
+          # Step 2: Checkout GitHub repository
           - checkout: githubRepo
             persistCredentials: true
 
-          # Step 2: Update deployment YAML with the new Docker image tag
+          # Step 3: Update deployment YAML with the new Docker image tag
           - script: |
               echo "Updating Deployment YAML with new Docker Image Tag"
               IMAGE_TAG=650378210006.dkr.ecr.ap-south-1.amazonaws.com/visionapply-frontend-prod:$(Build.BuildId)
@@ -61,9 +75,10 @@ stages:
               sed -i "s|image: .*|image: ${IMAGE_TAG}|g" deployment.yaml
               git config user.email "imran@centocode.com"
               git config user.name "centocode"
+              git pull origin main --rebase
               git fetch origin
-              git checkout main  # Explicitly switch to the master branch
+              git checkout main
               git add deployment.yaml
               git commit -m "Update deployment images to ${IMAGE_TAG}"
               git push origin main
-            displayName: 'Update Deployment YAML in GitHub'
+            displayName: 'Update Deployment YAML'
